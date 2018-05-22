@@ -8,19 +8,16 @@ const _ = require("lodash");
 const request = require("request");
 const rp = require('request-promise-native');
 const Uuid = require("uuid/v4");
-
 const config = require("./components/config.js"); 
 const logger = require("./components/logger.js"); 
 const errorHandlerModule = require("./components/error-handler.js");
 const fcodes = require('./utils/failure-codes.js');
-
 var errorHandler = errorHandlerModule(logger);
-
 var failureCodes = fcodes();
 var processedEvents = [];
 var failedEvents = [];
 
-var handler = (event, context, cb) => {
+function handler(event, context, cb){
 	var configData = config(context);
 	var authToken;
 
@@ -43,7 +40,7 @@ var handler = (event, context, cb) => {
 		});
 };
 
-var getTokenRequest = (configData) => {
+function getTokenRequest(configData){
 	return {
 		uri: configData.BASE_API_URL + configData.TOKEN_URL,
 		method: 'post',
@@ -56,9 +53,9 @@ var getTokenRequest = (configData) => {
 			return response;
 		}
 	};
-};
+}
 
-var getAuthResponse = (result) => {
+function getAuthResponse(result) {
 	return new Promise((resolve, reject) => {
 		if (result.statusCode === 200 && result.body && result.body.data && result.body.data.token) {
 			return resolve(result.body.data.token);
@@ -69,7 +66,7 @@ var getAuthResponse = (result) => {
 	});
 };
 
-var processEventRecords = (event, configData, authToken) => {
+function processEventRecords(event, configData, authToken){
 	return new Promise((resolve, reject) => {
 		var processEventRecordPromises = [];
 		for (var i = 0; i < event.Records.length; i++) {
@@ -86,7 +83,7 @@ var processEventRecords = (event, configData, authToken) => {
 	});
 };
 
-var processEventRecord = (record, configData, authToken) => {
+function processEventRecord (record, configData, authToken){
 	return new Promise((resolve, reject) => {
 		var sequenceNumber = record.kinesis.sequenceNumber;
 		var encodedPayload = record.kinesis.data;
@@ -94,13 +91,14 @@ var processEventRecord = (record, configData, authToken) => {
 		return checkForInterestedEvents(encodedPayload, sequenceNumber, configData)
 			.then(result => {
 				payload = result.payload;
-				if (result.interested_event) {
-					return processEvent(payload, configData, authToken);
-				} else {
-					return new Promise((resolve, reject) => {
-						resolve({ "message": "Not an interesting event" });
-					});
-				}
+				return payload
+				// if (result.interested_event) {
+				// 	return processEvent(payload, configData, authToken);
+				// } else {
+				// 	return new Promise((resolve, reject) => {
+				// 		resolve({ "message": "Not an interesting event" });
+				// 	});
+				// }
 			})
 			.then(result => {
 				handleProcessedEvents(sequenceNumber, payload);
@@ -114,7 +112,7 @@ var processEventRecord = (record, configData, authToken) => {
 	});
 };
 
-function checkForInterestedEvents(encodedPayload, sequenceNumber, configData)  {
+function  checkForInterestedEvents(encodedPayload, sequenceNumber, configData)  {
 	console.log("in the actual function 2");
 	return new Promise((resolve, reject) => {
 		var kinesisPayload = JSON.parse(new Buffer(encodedPayload, 'base64').toString('ascii'));
@@ -137,7 +135,7 @@ function checkForInterestedEvents(encodedPayload, sequenceNumber, configData)  {
 	});
 };
 
-var processEvent = (eventPayload, configData, authToken) => {
+function processEvent (eventPayload, configData, authToken) {
 	return new Promise((resolve, reject) => {
 		if (eventPayload.SERVICE_CONTEXT && eventPayload.SERVICE_CONTEXT.S) {
 			if (eventPayload.EVENT_NAME.S === configData.EVENTS.create_event_name) {
@@ -165,14 +163,14 @@ var processEvent = (eventPayload, configData, authToken) => {
 	});
 };
 
-var handleError = (errorType, message) => {
+function handleError(errorType, message){
 	var error = {};
 	error.failure_code = errorType;
 	error.failure_message = message;
 	return error;
 };
 
-var getDeploymentPayload = (svcContext) => {
+function getDeploymentPayload(svcContext){
 	var deploymentPayload = {};
 
 	if (svcContext.domain) {
@@ -206,7 +204,7 @@ var getDeploymentPayload = (svcContext) => {
 	return deploymentPayload;
 };
 
-var getSvcPayload = (method, payload, apiEndpoint, authToken) => {
+function  getSvcPayload(method, payload, apiEndpoint, authToken) {
 	var svcPayload = {
 		headers: {
 			'content-type': "application/json",
@@ -224,7 +222,7 @@ var getSvcPayload = (method, payload, apiEndpoint, authToken) => {
 	return svcPayload;
 };
 
-var procesRequest = (svcPayload) => {
+function procesRequest(svcPayload){
 	return new Promise((resolve, reject) => {
 		request(svcPayload, function (error, response, body) {
 			if (response.statusCode === 200 && body) {
@@ -238,7 +236,7 @@ var procesRequest = (svcPayload) => {
 	});
 };
 
-var processCreateEvent = (eventPayload, configData, authToken) => {
+function  processCreateEvent(eventPayload, configData, authToken) {
 	return new Promise((resolve, reject) => {
 		var svcContext = JSON.parse(eventPayload.SERVICE_CONTEXT.S);
 		logger.info("svcContext: " + JSON.stringify(svcContext));
@@ -258,7 +256,7 @@ var processCreateEvent = (eventPayload, configData, authToken) => {
 	});
 };
 
-var processUpdateEvent = (eventPayload, configData, authToken) => {
+function  processUpdateEvent(eventPayload, configData, authToken) {
 	return new Promise((resolve, reject) => {
 		var svcContext = JSON.parse(eventPayload.SERVICE_CONTEXT.S);
 		logger.info("svcContext: " + JSON.stringify(svcContext));
@@ -277,7 +275,7 @@ var processUpdateEvent = (eventPayload, configData, authToken) => {
 	});
 };
 
-var getDeployments = (deploymentPayload, configData, authToken) => {
+function getDeployments(deploymentPayload, configData, authToken) {
 	return new Promise((resolve, reject) => {
 		var env_id = deploymentPayload.environment_logical_id;
 		if (env_id) {
@@ -299,7 +297,7 @@ var getDeployments = (deploymentPayload, configData, authToken) => {
 	});
 };
 
-var updateDeployments = (res, deploymentPayload, configData, authToken) => {
+function updateDeployments(res, deploymentPayload, configData, authToken)  {
 	return new Promise((resolve, reject) => {
 		var deploymentResults = JSON.parse(res);
 		if (deploymentResults.data && deploymentResults.data.deployments && deploymentResults.data.deployments.length > 0) {
@@ -340,21 +338,21 @@ var updateDeployments = (res, deploymentPayload, configData, authToken) => {
 	});
 };
 
-var getEventProcessStatus = () => {
+function  getEventProcessStatus(){
 	return {
 		"processed_events": processedEvents.length,
 		"failed_events": failedEvents.length
 	};
 };
 
-var handleProcessedEvents = function (id, payload) {
+function handleProcessedEvents(id, payload) {
 	processedEvents.push({
 		"sequence_id": id,
 		"event": payload
 	});
 };
 
-var handleFailedEvents = function (id, failure_message, payload, failure_code) {
+function  handleFailedEvents(id, failure_message, payload, failure_code) {
 	failedEvents.push({
 		"sequence_id": id,
 		"event": payload,
@@ -363,23 +361,24 @@ var handleFailedEvents = function (id, failure_message, payload, failure_code) {
 	});
 };
 
-module.exports = {
-	getTokenRequest: getTokenRequest,
-	getAuthResponse: getAuthResponse,
-	handleError: handleError,
+ const factory= {
+	getTokenRequest,
+	getAuthResponse,
+	handleError,
 	checkForInterestedEvents,
-	handleProcessedEvents: handleProcessedEvents,
-	handleFailedEvents: handleFailedEvents,
-	getEventProcessStatus: getEventProcessStatus,
-	handler: handler,
-	processEventRecords: processEventRecords,
-	processEventRecord: processEventRecord,
-	processEvent: processEvent,
-	getDeploymentPayload: getDeploymentPayload,
-	getSvcPayload: getSvcPayload,
-	procesRequest: procesRequest,
-	processCreateEvent: processCreateEvent,
-	processUpdateEvent: processUpdateEvent,
-	getDeployments: getDeployments,
-	updateDeployments: updateDeployments
+	handleProcessedEvents,
+	handleFailedEvents,
+	getEventProcessStatus,
+	handler,
+	processEventRecords,
+	processEventRecord,
+	processEvent,
+	getDeploymentPayload,
+	getSvcPayload,
+	procesRequest,
+	processCreateEvent,
+	processUpdateEvent,
+	getDeployments,
+	updateDeployments
 };
+module.exports = factory;

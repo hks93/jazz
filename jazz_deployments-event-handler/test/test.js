@@ -203,10 +203,10 @@ describe("processEventRecord", () => {
         }
       }
     }
-    sandbox = sinon.createSandbox();
+    
   })
   afterEach(()=>{
-    sandbox.restore();
+ 
     if(reqStub){
       reqStub.restore();
     }
@@ -221,11 +221,20 @@ describe("processEventRecord", () => {
         }
       }
     };
-    
-    var checkForInterestedEvents = sinon.stub(index,"checkForInterestedEvents").withArgs("a","b","c").resolves("somthing");
+    //console.log("this is index",index);
+    let temp = {
+      "x": 2
+    }
+    var checkForInterestedEventsStub =  sinon.stub(index,"checkForInterestedEvents").resolves(temp);
+    //console.log(checkForInterestedEventsStub );
+    // reqStub = sinon.stub(request, "Request", (obj) => {
+    //   return obj.callback(null, responseObject, responseObject.body);
+    // })
+   
     var processEventStub = sinon.stub(index,"processEvent")
     var tempAuth = "Auth_token"
     index.processEventRecord(event.Records[0], configData, tempAuth).then((obj) => {
+      sinon.assert.calledOnce(processEventStub)
     })
   })
   it("should Return success message when called with valid paramenters", () => {
