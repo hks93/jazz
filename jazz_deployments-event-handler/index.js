@@ -21,20 +21,20 @@ function handler(event, context, cb){
 	var configData = config(context);
 	var authToken;
 
-	rp(getTokenRequest(configData))
+	rp(factory.getTokenRequest(configData))
 		.then(result => {
-			return getAuthResponse(result);
+			return factory.getAuthResponse(result);
 		})
 		.then(authToken => {
-			return processEventRecords(event, configData, authToken);
+			return factory.processEventRecords(event, configData, authToken);
 		})
 		.then(result => {
-			var records = getEventProcessStatus();
+			var records = factory.getEventProcessStatus();
 			logger.info("Successfully processed events: " + JSON.stringify(records));
 			return cb(null, records);
 		})
 		.catch(err => {
-			var records = getEventProcessStatus();
+			var records = factory.getEventProcessStatus();
 			logger.error("Error processing events: " + JSON.stringify(err));
 			return cb(null, records);
 		});
@@ -70,7 +70,7 @@ function processEventRecords(event, configData, authToken){
 	return new Promise((resolve, reject) => {
 		var processEventRecordPromises = [];
 		for (var i = 0; i < event.Records.length; i++) {
-			processEventRecordPromises.push(processEventRecord(event.Records[i], configData, authToken));
+			processEventRecordPromises.push(factory.processEventRecord(event.Records[i], configData, authToken));
 		}
 		Promise.all(processEventRecordPromises)
 			.then((result) => {
@@ -88,31 +88,31 @@ function processEventRecord (record, configData, authToken){
 		var sequenceNumber = record.kinesis.sequenceNumber;
 		var encodedPayload = record.kinesis.data;
 		var payload;
-		return checkForInterestedEvents(encodedPayload, sequenceNumber, configData)
+		console.log("reached here")
+		return factory.checkForInterestedEvents(encodedPayload, sequenceNumber, configData)
 			.then(result => {
 				payload = result.payload;
-				return payload
-				// if (result.interested_event) {
-				// 	return processEvent(payload, configData, authToken);
-				// } else {
-				// 	return new Promise((resolve, reject) => {
-				// 		resolve({ "message": "Not an interesting event" });
-				// 	});
-				// }
+				if (result.interested_event) {
+					return factory.processEvent(payload, configData, authToken);
+				} else {
+					return new Promise((resolve, reject) => {
+						resolve({ "message": "Not an interesting event" });
+					});
+				}
 			})
 			.then(result => {
-				handleProcessedEvents(sequenceNumber, payload);
+				factory.handleProcessedEvents(sequenceNumber, payload);
 				return resolve(result);
 			})
 			.catch(err => {
 				logger.error("processEventRecord failed for: " + JSON.stringify(record));
-				handleFailedEvents(sequenceNumber, err.failure_message, payload, err.failure_code);
+				factory.handleFailedEvents(sequenceNumber, err.failure_message, payload, err.failure_code);
 				return reject(err);
 			});
 	});
 };
 
-function  checkForInterestedEvents(encodedPayload, sequenceNumber, configData)  {
+function checkForInterestedEvents(encodedPayload, sequenceNumber, configData)  {
 	console.log("in the actual function 2");
 	return new Promise((resolve, reject) => {
 		var kinesisPayload = JSON.parse(new Buffer(encodedPayload, 'base64').toString('ascii'));
@@ -139,14 +139,14 @@ function processEvent (eventPayload, configData, authToken) {
 	return new Promise((resolve, reject) => {
 		if (eventPayload.SERVICE_CONTEXT && eventPayload.SERVICE_CONTEXT.S) {
 			if (eventPayload.EVENT_NAME.S === configData.EVENTS.create_event_name) {
-				processCreateEvent(eventPayload, configData, authToken)
+				factory.processCreateEvent(eventPayload, configData, authToken)
 					.then(result => { return resolve(result); })
 					.catch(err => {
 						logger.error("processCreateEvent failed: " + JSON.stringify(err));
 						return reject(err);
 					});
 			} else if (eventPayload.EVENT_NAME.S === configData.EVENTS.update_event_name) {
-				processUpdateEvent(eventPayload, configData, authToken)
+				factory.processUpdateEvent(eventPayload, configData, authToken)
 					.then(result => { return resolve(result); })
 					.catch(err => {
 						logger.error("processUpdateEvent failed: " + JSON.stringify(err));
@@ -157,7 +157,7 @@ function processEvent (eventPayload, configData, authToken) {
 			}
 		} else {
 			logger.info("Service Context is not defined");
-			var err = handleError(failureCodes.PR_ERROR_4.code, "Service context is not defined");
+			var err = factory.handleError(failureCodes.PR_ERROR_4.code, "Service context is not defined");
 			return reject(err);
 		}
 	});
@@ -229,7 +229,7 @@ function procesRequest(svcPayload){
 				return resolve(body);
 			} else {
 				logger.error("Error processing request: " + JSON.stringify(response));
-				var error = handleError(failureCodes.PR_ERROR_3.code, response.body.message);
+				var error = factory.handleError(failureCodes.PR_ERROR_3.code, response.body.message);
 				return reject(error);
 			}
 		});
@@ -241,13 +241,13 @@ function  processCreateEvent(eventPayload, configData, authToken) {
 		var svcContext = JSON.parse(eventPayload.SERVICE_CONTEXT.S);
 		logger.info("svcContext: " + JSON.stringify(svcContext));
 
-		var deploymentPayload = getDeploymentPayload(svcContext);
+		var deploymentPayload = factory.getDeploymentPayload(svcContext);
 		deploymentPayload.service_id = eventPayload.SERVICE_ID.S
 		deploymentPayload.service = eventPayload.SERVICE_NAME.S
 		var apiEndpoint = configData.BASE_API_URL + configData.DEPLOYMENT_API_RESOURCE;
-		var svcPayload = getSvcPayload("POST", deploymentPayload, apiEndpoint, authToken);
+		var svcPayload = factory.getSvcPayload("POST", deploymentPayload, apiEndpoint, authToken);
 
-		procesRequest(svcPayload)
+		factory.procesRequest(svcPayload)
 			.then(result => { return resolve(result); })
 			.catch(err => {
 				logger.error("processCreateEvent failed: " + JSON.stringify(err));
@@ -261,12 +261,12 @@ function  processUpdateEvent(eventPayload, configData, authToken) {
 		var svcContext = JSON.parse(eventPayload.SERVICE_CONTEXT.S);
 		logger.info("svcContext: " + JSON.stringify(svcContext));
 
-		var deploymentPayload = getDeploymentPayload(svcContext);
+		var deploymentPayload = factory.getDeploymentPayload(svcContext);
 		deploymentPayload.service_id = eventPayload.SERVICE_ID.S
 		deploymentPayload.service = eventPayload.SERVICE_NAME.S
 
-		getDeployments(deploymentPayload, configData, authToken)
-			.then(result => { return updateDeployments(result, deploymentPayload, configData, authToken); })
+		factory.getDeployments(deploymentPayload, configData, authToken)
+			.then(result => { return factory.updateDeployments(result, deploymentPayload, configData, authToken); })
 			.then(result => { return resolve(result); })
 			.catch(err => {
 				logger.error("processUpdateEvent failed: " + JSON.stringify(err));
@@ -282,7 +282,7 @@ function getDeployments(deploymentPayload, configData, authToken) {
 			var service_name = deploymentPayload.service;
 			var domain = deploymentPayload.domain;
 			var apiEndpoint = configData.BASE_API_URL + configData.DEPLOYMENT_API_RESOURCE + "?service=" + service_name + "&domain=" + domain + "&environment=" + env_id;;
-			var svcPayload = getSvcPayload("GET", null, apiEndpoint, authToken);
+			var svcPayload = factory.getSvcPayload("GET", null, apiEndpoint, authToken);
 			procesRequest(svcPayload)
 				.then(result => { return resolve(result); })
 				.catch(err => {
@@ -319,7 +319,7 @@ function updateDeployments(res, deploymentPayload, configData, authToken)  {
 				logger.info("Update deployment request payload: " + JSON.stringify(deploymentPayload));
 				var apiEndpoint = configData.BASE_API_URL + configData.DEPLOYMENT_API_RESOURCE + "/" + deploymentData.deployment_id;
 				var svcPayload = getSvcPayload("PUT", deploymentPayload, apiEndpoint, authToken);
-				procesRequest(svcPayload)
+				factory.procesRequest(svcPayload)
 					.then(result => { return resolve(result); })
 					.catch(err => {
 						logger.error("updateDeployments failed: " + JSON.stringify(err));
