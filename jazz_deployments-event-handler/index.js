@@ -283,7 +283,7 @@ function getDeployments(deploymentPayload, configData, authToken) {
 			var domain = deploymentPayload.domain;
 			var apiEndpoint = configData.BASE_API_URL + configData.DEPLOYMENT_API_RESOURCE + "?service=" + service_name + "&domain=" + domain + "&environment=" + env_id;;
 			var svcPayload = factory.getSvcPayload("GET", null, apiEndpoint, authToken);
-			procesRequest(svcPayload)
+			factory.procesRequest(svcPayload)
 				.then(result => { return resolve(result); })
 				.catch(err => {
 					logger.error("getDeployments failed: " + JSON.stringify(err));
